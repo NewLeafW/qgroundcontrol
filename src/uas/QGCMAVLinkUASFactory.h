@@ -10,7 +10,6 @@
 
 // INCLUDE ALL MAV/UAS CLASSES USING MAVLINK
 #include "UAS.h"
-#include "PxQuadMAV.h"
 
 class QGCMAVLinkUASFactory : public QObject
 {
@@ -19,7 +18,7 @@ public:
     explicit QGCMAVLinkUASFactory(QObject *parent = 0);
 
     /** @brief Create a new UAS object using MAVLink as protocol */
-    static UASInterface* createUAS(MAVLinkProtocol* mavlink, LinkInterface* link, int sysid, mavlink_heartbeat_t* heartbeat, QObject* parent=NULL);
+    static UASInterface* createUAS(MAVLinkProtocol* mavlink, LinkInterface* link, int sysid, MAV_AUTOPILOT autopilotType);
 
 signals:
 

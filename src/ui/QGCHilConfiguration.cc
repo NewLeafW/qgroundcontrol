@@ -29,6 +29,8 @@ QGCHilConfiguration::QGCHilConfiguration(UAS *mav, QWidget *parent) :
     }
 
     settings.endGroup();
+
+    connect(mav, SIGNAL(destroyed()), this, SLOT(deleteLater()));
 }
 
 void QGCHilConfiguration::receiveStatusMessage(const QString& message)
@@ -42,7 +44,6 @@ QGCHilConfiguration::~QGCHilConfiguration()
     settings.beginGroup("QGC_HILCONFIG");
     settings.setValue("SIMULATOR_INDEX", ui->simComboBox->currentIndex());
     settings.endGroup();
-    settings.sync();
     delete ui;
 }
 

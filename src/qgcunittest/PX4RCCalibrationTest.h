@@ -21,34 +21,35 @@
  
  ======================================================================*/
 
-#ifndef PX4RCCALIBRATIONTEST_H
-#define PX4RCCALIBRATIONTEST_H
+#ifndef RadioConfigTest_H
+#define RadioConfigTest_H
 
-#include "AutoTest.h"
-#include "MockUASManager.h"
-#include "MockUAS.h"
+#include "UnitTest.h"
+#include "MockLink.h"
 #include "MultiSignalSpy.h"
-#include "px4_configuration/PX4RCCalibration.h"
+#include "RadioComponentController.h"
+#include "QGCLoggingCategory.h"
+#include "AutoPilotPlugin.h"
+#include "QGCQmlWidgetHolder.h"
 
 /// @file
-///     @brief PX4RCCalibration Widget unit test
+///     @brief Radio Config unit test
 ///
 ///     @author Don Gagne <don@thegagnes.com>
 
-///     @brief PX4RCCalibration Widget unit test
-class PX4RCCalibrationTest : public QObject
+Q_DECLARE_LOGGING_CATEGORY(RadioConfigTestLog)
+
+class RadioConfigTest : public UnitTest
 {
     Q_OBJECT
     
 public:
-    PX4RCCalibrationTest(void);
+    RadioConfigTest(void);
     
 private slots:
-    void initTestCase(void);
     void init(void);
     void cleanup(void);
     
-    void _setUAS_test(void);
     void _minRCChannels_test(void);
     void _fullCalibration_test(void);
     
@@ -70,10 +71,10 @@ private:
     void _minRCChannels(void);
     void _beginCalibration(void);
     void _stickMoveWaitForSettle(int channel, int value);
-    void _stickMoveAutoStep(const char* functionStr, enum PX4RCCalibration::rcCalFunctions function, enum MoveToDirection direction, bool identifyStep);
+    void _stickMoveAutoStep(const char* functionStr, enum RadioComponentController::rcCalFunctions function, enum MoveToDirection direction, bool identifyStep);
     void _switchMinMaxStep(void);
     void _flapsDetectStep(void);
-    void _switchSelectAutoStep(const char* functionStr, PX4RCCalibration::rcCalFunctions function);
+    void _switchSelectAutoStep(const char* functionStr, RadioComponentController::rcCalFunctions function);
     
     enum {
         validateMinMaxMask =    1 << 0,
@@ -93,23 +94,16 @@ private:
     
     void _validateParameters(void);
     
-    MockUASManager*     _mockUASManager;
-    MockUAS*            _mockUAS;
+    MockLink*           _mockLink;
+    AutoPilotPlugin*    _autopilot;
     
-    PX4RCCalibration*   _calWidget;
+    QGCQmlWidgetHolder* _calWidget;
     
     enum {
         nextButtonMask =        1 << 0,
         cancelButtonMask =      1 << 1,
         skipButtonMask =        1 << 2
     };
-    
-    QPushButton*    _nextButton;
-    QPushButton*    _cancelButton;
-    QPushButton*    _skipButton;
-    QLabel*         _statusLabel;
-    
-    RCValueWidget* _rgValueWidget[PX4RCCalibration::_chanMax];
     
     const char*         _rgSignals[1];
     MultiSignalSpy*     _multiSpyNextButtonMessageBox;
@@ -124,11 +118,11 @@ private:
     static const int _stickSettleWait;
 	
     static const struct ChannelSettings _rgChannelSettings[_availableChannels];
-    static const struct ChannelSettings _rgChannelSettingsValidate[PX4RCCalibration::_chanMax];
+    static const struct ChannelSettings _rgChannelSettingsValidate[RadioComponentController::_chanMax];
 	
-	static const int _rgFunctionChannelMap[PX4RCCalibration::rcCalFunctionMax];
+	int _rgFunctionChannelMap[RadioComponentController::rcCalFunctionMax];
+    
+    RadioComponentController*   _controller;
 };
-
-DECLARE_TEST(PX4RCCalibrationTest)
 
 #endif

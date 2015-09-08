@@ -39,7 +39,7 @@ This file is part of the QGROUNDCONTROL project
 #include <QHostInfo>
 #include "UAS.h"
 #include "UASInterface.h"
-#include "MainWindow.h"
+#include "QGCMessageBox.h"
 
 QGCXPlaneLink::QGCXPlaneLink(UASInterface* mav, QString remoteHost, QHostAddress localHost, quint16 localPort) :
     mav(mav),
@@ -80,19 +80,18 @@ QGCXPlaneLink::~QGCXPlaneLink()
     storeSettings();
     // Tell the thread to exit
     _should_exit = true;
-    // Wait for it to exit
-    wait();
 
-//    if(connectState) {
-//       disconnectSimulation();
-//    }
+    if (socket) {
+        socket->close();
+        socket->deleteLater();
+        socket = NULL;
+    }
 }
 
 void QGCXPlaneLink::loadSettings()
 {
     // Load defaults from settings
     QSettings settings;
-    settings.sync();
     settings.beginGroup("QGC_XPLANE_LINK");
     setRemoteHost(settings.value("REMOTE_HOST", QString("%1:%2").arg(remoteHost.toString()).arg(remotePort)).toString());
     setVersion(settings.value("XPLANE_VERSION", 10).toInt());
@@ -111,7 +110,6 @@ void QGCXPlaneLink::storeSettings()
     settings.setValue("AIRFRAME", airframeName);
     settings.setValue("SENSOR_HIL", _sensorHilEnabled);
     settings.endGroup();
-    settings.sync();
 }
 
 void QGCXPlaneLink::setVersion(const QString& version)
@@ -166,30 +164,35 @@ void QGCXPlaneLink::run()
 
     socket = new QUdpSocket(this);
     socket->moveToThread(this);
-    connectState = socket->bind(localHost, localPort);
+    connectState = socket->bind(localHost, localPort, QAbstractSocket::ReuseAddressHint);
     if (!connectState) {
 
         emit statusMessage("Binding socket failed!");
 
-        delete socket;
+        socket->deleteLater();
         socket = NULL;
         return;
     }
 
+    emit statusMessage(tr("Waiting for XPlane.."));
+
     QObject::connect(socket, SIGNAL(readyRead()), this, SLOT(readBytes()));
-
-    connect(mav, SIGNAL(hilControlsChanged(quint64, float, float, float, float, quint8, quint8)), this, SLOT(updateControls(quint64,float,float,float,float,quint8,quint8)), Qt::QueuedConnection);
-    connect(mav, SIGNAL(hilActuatorsChanged(quint64, float, float, float, float, float, float, float, float)), this, SLOT(updateActuators(quint64,float,float,float,float,float,float,float,float)), Qt::QueuedConnection);
-
-    connect(this, SIGNAL(hilGroundTruthChanged(quint64,float,float,float,float,float,float,double,double,double,float,float,float,float,float,float,float,float)), mav, SLOT(sendHilGroundTruth(quint64,float,float,float,float,float,float,double,double,double,float,float,float,float,float,float,float,float)), Qt::QueuedConnection);
-    connect(this, SIGNAL(hilStateChanged(quint64,float,float,float,float,float,float,double,double,double,float,float,float,float,float,float,float,float)), mav, SLOT(sendHilState(quint64,float,float,float,float,float,float,double,double,double,float,float,float,float,float,float,float,float)), Qt::QueuedConnection);
-    connect(this, SIGNAL(sensorHilGpsChanged(quint64,double,double,double,int,float,float,float,float,float,float,float,int)), mav, SLOT(sendHilGps(quint64,double,double,double,int,float,float,float,float,float,float,float,int)), Qt::QueuedConnection);
-    connect(this, SIGNAL(sensorHilRawImuChanged(quint64,float,float,float,float,float,float,float,float,float,float,float,float,float,quint32)), mav, SLOT(sendHilSensors(quint64,float,float,float,float,float,float,float,float,float,float,float,float,float,quint32)), Qt::QueuedConnection);
 
     UAS* uas = dynamic_cast<UAS*>(mav);
     if (uas)
     {
+        connect(uas, SIGNAL(hilControlsChanged(quint64, float, float, float, float, quint8, quint8)), this, SLOT(updateControls(quint64,float,float,float,float,quint8,quint8)), Qt::QueuedConnection);
+        connect(uas, SIGNAL(hilActuatorsChanged(quint64, float, float, float, float, float, float, float, float)), this, SLOT(updateActuators(quint64,float,float,float,float,float,float,float,float)), Qt::QueuedConnection);
+
+        connect(this, SIGNAL(hilGroundTruthChanged(quint64,float,float,float,float,float,float,double,double,double,float,float,float,float,float,float,float,float)), uas, SLOT(sendHilGroundTruth(quint64,float,float,float,float,float,float,double,double,double,float,float,float,float,float,float,float,float)), Qt::QueuedConnection);
+        connect(this, SIGNAL(hilStateChanged(quint64,float,float,float,float,float,float,double,double,double,float,float,float,float,float,float,float,float)), uas, SLOT(sendHilState(quint64,float,float,float,float,float,float,double,double,double,float,float,float,float,float,float,float,float)), Qt::QueuedConnection);
+        connect(this, SIGNAL(sensorHilGpsChanged(quint64,double,double,double,int,float,float,float,float,float,float,float,int)), uas, SLOT(sendHilGps(quint64,double,double,double,int,float,float,float,float,float,float,float,int)), Qt::QueuedConnection);
+        connect(this, SIGNAL(sensorHilRawImuChanged(quint64,float,float,float,float,float,float,float,float,float,float,float,float,float,quint32)), uas, SLOT(sendHilSensors(quint64,float,float,float,float,float,float,float,float,float,float,float,float,float,quint32)), Qt::QueuedConnection);
+
         uas->startHil();
+    } else {
+        emit statusMessage(tr("Failed to connect to drone instance"));
+        return;
     }
 
 #pragma pack(push, 1)
@@ -239,15 +242,16 @@ void QGCXPlaneLink::run()
         QGC::SLEEP::msleep(5);
     }
 
-    if (mav)
+    uas = dynamic_cast<UAS*>(mav);
+    if (uas)
     {
-        disconnect(mav, SIGNAL(hilControlsChanged(quint64, float, float, float, float, quint8, quint8)), this, SLOT(updateControls(quint64,float,float,float,float,quint8,quint8)));
-        disconnect(mav, SIGNAL(hilActuatorsChanged(quint64, float, float, float, float, float, float, float, float)), this, SLOT(updateActuators(quint64,float,float,float,float,float,float,float,float)));
+        disconnect(uas, SIGNAL(hilControlsChanged(quint64, float, float, float, float, quint8, quint8)), this, SLOT(updateControls(quint64,float,float,float,float,quint8,quint8)));
+        disconnect(uas, SIGNAL(hilActuatorsChanged(quint64, float, float, float, float, float, float, float, float)), this, SLOT(updateActuators(quint64,float,float,float,float,float,float,float,float)));
 
-        disconnect(this, SIGNAL(hilGroundTruthChanged(quint64,float,float,float,float,float,float,double,double,double,float,float,float,float,float,float,float,float)), mav, SLOT(sendHilGroundTruth(quint64,float,float,float,float,float,float,double,double,double,float,float,float,float,float,float,float,float)));
-        disconnect(this, SIGNAL(hilStateChanged(quint64,float,float,float,float,float,float,double,double,double,float,float,float,float,float,float,float,float)), mav, SLOT(sendHilState(quint64,float,float,float,float,float,float,double,double,double,float,float,float,float,float,float,float,float)));
-        disconnect(this, SIGNAL(sensorHilGpsChanged(quint64,double,double,double,int,float,float,float,float,float,float,float,int)), mav, SLOT(sendHilGps(quint64,double,double,double,int,float,float,float,float,float,float,float,int)));
-        disconnect(this, SIGNAL(sensorHilRawImuChanged(quint64,float,float,float,float,float,float,float,float,float,float,float,float,float,quint32)), mav, SLOT(sendHilSensors(quint64,float,float,float,float,float,float,float,float,float,float,float,float,float,quint32)));
+        disconnect(this, SIGNAL(hilGroundTruthChanged(quint64,float,float,float,float,float,float,double,double,double,float,float,float,float,float,float,float,float)), uas, SLOT(sendHilGroundTruth(quint64,float,float,float,float,float,float,double,double,double,float,float,float,float,float,float,float,float)));
+        disconnect(this, SIGNAL(hilStateChanged(quint64,float,float,float,float,float,float,double,double,double,float,float,float,float,float,float,float,float)), uas, SLOT(sendHilState(quint64,float,float,float,float,float,float,double,double,double,float,float,float,float,float,float,float,float)));
+        disconnect(this, SIGNAL(sensorHilGpsChanged(quint64,double,double,double,int,float,float,float,float,float,float,float,int)), uas, SLOT(sendHilGps(quint64,double,double,double,int,float,float,float,float,float,float,float,int)));
+        disconnect(this, SIGNAL(sensorHilRawImuChanged(quint64,float,float,float,float,float,float,float,float,float,float,float,float,float,quint32)), uas, SLOT(sendHilSensors(quint64,float,float,float,float,float,float,float,float,float,float,float,float,float,quint32)));
 
         // Do not toggle HIL state on the UAS - this is not the job of this link, but of the
         // UAS object
@@ -255,8 +259,10 @@ void QGCXPlaneLink::run()
 
     connectState = false;
 
+    QObject::disconnect(socket, SIGNAL(readyRead()), this, SLOT(readBytes()));
+
     socket->close();
-    delete socket;
+    socket->deleteLater();
     socket = NULL;
 
     emit simulationDisconnected();
@@ -272,28 +278,34 @@ void QGCXPlaneLink::setPort(int localPort)
 
 void QGCXPlaneLink::processError(QProcess::ProcessError err)
 {
-    switch(err)
-    {
-    case QProcess::FailedToStart:
-        MainWindow::instance()->showCriticalMessage(tr("X-Plane Failed to Start"), tr("Please check if the path and command is correct"));
-        break;
-    case QProcess::Crashed:
-        MainWindow::instance()->showCriticalMessage(tr("X-Plane Crashed"), tr("This is a X-Plane-related problem. Please upgrade X-Plane"));
-        break;
-    case QProcess::Timedout:
-        MainWindow::instance()->showCriticalMessage(tr("X-Plane Start Timed Out"), tr("Please check if the path and command is correct"));
-        break;
-    case QProcess::WriteError:
-        MainWindow::instance()->showCriticalMessage(tr("Could not Communicate with X-Plane"), tr("Please check if the path and command is correct"));
-        break;
-    case QProcess::ReadError:
-        MainWindow::instance()->showCriticalMessage(tr("Could not Communicate with X-Plane"), tr("Please check if the path and command is correct"));
-        break;
-    case QProcess::UnknownError:
-    default:
-        MainWindow::instance()->showCriticalMessage(tr("X-Plane Error"), tr("Please check if the path and command is correct."));
-        break;
+    QString msg;
+    
+    switch(err) {
+        case QProcess::FailedToStart:
+            msg = tr("X-Plane Failed to start. Please check if the path and command is correct");
+            break;
+            
+        case QProcess::Crashed:
+            msg = tr("X-Plane crashed. This is an X-Plane-related problem, check for X-Plane upgrade.");
+            break;
+            
+        case QProcess::Timedout:
+            msg = tr("X-Plane start timed out. Please check if the path and command is correct");
+            break;
+            
+        case QProcess::ReadError:
+        case QProcess::WriteError:
+            msg = tr("Could not communicate with X-Plane. Please check if the path and command are correct");
+            break;
+            
+        case QProcess::UnknownError:
+        default:
+            msg = tr("X-Plane error occurred. Please check if the path and command is correct.");
+            break;
     }
+    
+    
+    QGCMessageBox::critical(tr("X-Plane HIL"), msg);
 }
 
 QString QGCXPlaneLink::getRemoteHost()
@@ -549,8 +561,12 @@ void QGCXPlaneLink::readBytes()
     quint16 senderPort;
 
     unsigned int s = socket->pendingDatagramSize();
-    if (s > maxLength) std::cerr << __FILE__ << __LINE__ << " UDP datagram overflow, allowed to read less bytes than datagram size" << std::endl;
+    if (s > maxLength) std::cerr << __FILE__ << __LINE__ << " UDP datagram overflow, allowed to read less bytes than datagram size: " << s << std::endl;
     socket->readDatagram(data, maxLength, &sender, &senderPort);
+    if (s > maxLength) {
+    	std::string headStr = std::string(data, data+5);
+    	std::cerr << __FILE__ << __LINE__ << " UDP datagram header: " << headStr << std::endl;
+    }
 
     // Calculate the number of data segments a 36 bytes
     // XPlane always has 5 bytes header: 'DATA@'
@@ -624,7 +640,8 @@ void QGCXPlaneLink::readBytes()
 
 				fields_changed |= (1 << 0) | (1 << 1) | (1 << 2);
             }
-            else if (p.index == 6 && xPlaneVersion == 10)
+            // atmospheric pressure aircraft for XPlane 9 and 10
+            else if (p.index == 6)
             {
                 // inHg to hPa (hecto Pascal / millibar)
                 abs_pressure = p.f[0] * 33.863886666718317f;
@@ -735,7 +752,7 @@ void QGCXPlaneLink::readBytes()
 				alt = p.f[2] * 0.3048f; // convert feet (MSL) to meters
 				alt_agl = p.f[3] * 0.3048f; //convert feet (AGL) to meters
             }
-            else if (p.index == 21 && xPlaneVersion == 10)
+            else if (p.index == 21)
             {
                 vy = p.f[3];
                 vx = -p.f[5];
@@ -790,7 +807,7 @@ void QGCXPlaneLink::readBytes()
     }
 
     // Send updated state
-    if (emitUpdate && (QGC::groundTimeMilliseconds() - simUpdateLast) > 3)
+    if (emitUpdate && (QGC::groundTimeMilliseconds() - simUpdateLast) > 2)
     {
         simUpdateHz = simUpdateHz * 0.9f + 0.1f * (1000.0f / (QGC::groundTimeMilliseconds() - simUpdateLast));
         if (QGC::groundTimeMilliseconds() - simUpdateLastText > 2000) {
@@ -898,7 +915,6 @@ bool QGCXPlaneLink::disconnectSimulation()
     if (connectState)
     {
         _should_exit = true;
-        wait();
     } else {
         emit simulationDisconnected();
         emit simulationConnected(false);

@@ -32,18 +32,20 @@ This file is part of the QGROUNDCONTROL project
 #ifndef _UAS_H_
 #define _UAS_H_
 
-#include <QThread>
 #include "UASInterface.h"
 #include <MAVLinkProtocol.h>
 #include <QVector3D>
 #include "QGCMAVLink.h"
+#include "FileManager.h"
+#ifndef __mobile__
+#include "JoystickInput.h"
 #include "QGCHilLink.h"
 #include "QGCFlightGearLink.h"
 #include "QGCJSBSimLink.h"
 #include "QGCXPlaneLink.h"
-#include "QGCUASParamManager.h"
-#include "QGCUASFileManager.h"
+#endif
 
+Q_DECLARE_LOGGING_CATEGORY(UASLog)
 
 /**
  * @brief A generic MAVLINK-connected MAV/UAV
@@ -57,7 +59,7 @@ class UAS : public UASInterface
 {
     Q_OBJECT
 public:
-    UAS(MAVLinkProtocol* protocol, QThread* thread, int id = 0);
+    UAS(MAVLinkProtocol* protocol, int id, MAV_AUTOPILOT autopilotType);
     ~UAS();
 
     float lipoFull;  ///< 100% charged voltage
@@ -71,10 +73,6 @@ public:
     const QString& getShortState() const;
     /** @brief Get short mode */
     const QString& getShortMode() const;
-    /** @brief Translate from mode id to text */
-    static QString getShortModeTextFor(uint8_t base_mode, uint32_t custom_mode, int autopilot);
-    /** @brief Translate from mode id to audio text */
-    static QString getAudioModeTextFor(int id);
     /** @brief Get the unique system id */
     int getUASID() const;
     /** @brief Get the airframe */
@@ -87,12 +85,11 @@ public:
 
     /** @brief The time interval the robot is switched on */
     quint64 getUptime() const;
-    /** @brief Get the status flag for the communication */
-    int getCommunicationStatus() const;
     /** @brief Add one measurement and get low-passed voltage */
     float filterVoltage(float value) const;
     /** @brief Get the links associated with this robot */
-    QList<LinkInterface*>* getLinks();
+    QList<LinkInterface*> getLinks();
+    bool isLogReplay(void);
 
     Q_PROPERTY(double localX READ getLocalX WRITE setLocalX NOTIFY localXChanged)
     Q_PROPERTY(double localY READ getLocalY WRITE setLocalY NOTIFY localYChanged)
@@ -331,79 +328,77 @@ public:
         return nedAttGlobalOffset;
     }
 
+
+    // Setters for HIL noise variance
+    void setXaccVar(float var){
+        xacc_var = var;
+    }
+
+    void setYaccVar(float var){
+        yacc_var = var;
+    }
+
+    void setZaccVar(float var){
+        zacc_var = var;
+    }
+
+    void setRollSpeedVar(float var){
+        rollspeed_var = var;
+    }
+
+    void setPitchSpeedVar(float var){
+        pitchspeed_var = var;
+    }
+
+    void setYawSpeedVar(float var){
+        pitchspeed_var = var;
+    }
+
+    void setXmagVar(float var){
+        xmag_var = var;
+    }
+
+    void setYmagVar(float var){
+        ymag_var = var;
+    }
+
+    void setZmagVar(float var){
+        zmag_var = var;
+    }
+
+    void setAbsPressureVar(float var){
+        abs_pressure_var = var;
+    }
+
+    void setDiffPressureVar(float var){
+        diff_pressure_var = var;
+    }
+
+    void setPressureAltVar(float var){
+        pressure_alt_var = var;
+    }
+
+    void setTemperatureVar(float var){
+        temperature_var = var;
+    }
+
     bool isRotaryWing();
     bool isFixedWing();
 
-#if defined(QGC_PROTOBUF_ENABLED) && defined(QGC_USE_PIXHAWK_MESSAGES)
-    px::GLOverlay getOverlay()
-    {
-        QMutexLocker locker(&overlayMutex);
-        return overlay;
-    }
-
-    px::GLOverlay getOverlay(qreal& receivedTimestamp)
-    {
-        receivedTimestamp = receivedOverlayTimestamp;
-        QMutexLocker locker(&overlayMutex);
-        return overlay;
-    }
-
-    px::ObstacleList getObstacleList() {
-        QMutexLocker locker(&obstacleListMutex);
-        return obstacleList;
-    }
-
-    px::ObstacleList getObstacleList(qreal& receivedTimestamp) {
-        receivedTimestamp = receivedObstacleListTimestamp;
-        QMutexLocker locker(&obstacleListMutex);
-        return obstacleList;
-    }
-
-    px::Path getPath() {
-        QMutexLocker locker(&pathMutex);
-        return path;
-    }
-
-    px::Path getPath(qreal& receivedTimestamp) {
-        receivedTimestamp = receivedPathTimestamp;
-        QMutexLocker locker(&pathMutex);
-        return path;
-    }
-
-    px::PointCloudXYZRGB getPointCloud() {
-        QMutexLocker locker(&pointCloudMutex);
-        return pointCloud;
-    }
-
-    px::PointCloudXYZRGB getPointCloud(qreal& receivedTimestamp) {
-        receivedTimestamp = receivedPointCloudTimestamp;
-        QMutexLocker locker(&pointCloudMutex);
-        return pointCloud;
-    }
-
-    px::RGBDImage getRGBDImage() {
-        QMutexLocker locker(&rgbdImageMutex);
-        return rgbdImage;
-    }
-
-    px::RGBDImage getRGBDImage(qreal& receivedTimestamp) {
-        receivedTimestamp = receivedRGBDImageTimestamp;
-        QMutexLocker locker(&rgbdImageMutex);
-        return rgbdImage;
-    }
-#endif
-
     friend class UASWaypointManager;
-    friend class QGCUASFileManager;
+    friend class FileManager;
 
 protected: //COMMENTS FOR TEST UNIT
     /// LINK ID AND STATUS
     int uasId;                    ///< Unique system ID
     QMap<int, QString> components;///< IDs and names of all detected onboard components
-    QList<LinkInterface*>* links; ///< List of links this UAS can be reached by
+    
+    /// List of all links associated with this UAS. We keep SharedLinkInterface objects which are QSharedPointer's in order to
+    /// maintain reference counts across threads. This way Link deletion works correctly.
+    QList<SharedLinkInterface> _links;
+    
     QList<int> unknownPackets;    ///< Packet IDs which are unknown and have been received
     MAVLinkProtocol* mavlink;     ///< Reference to the MAVLink instance
-    CommStatus commStatus;        ///< Communication status
     float receiveDropRate;        ///< Percentage of packets that were dropped on the MAV's receiving link (from GCS and other MAVs)
     float sendDropRate;           ///< Percentage of packets that were not received from the MAV by the GCS
     quint64 lastHeartbeat;        ///< Time of the last heartbeat message
@@ -431,15 +426,10 @@ protected: //COMMENTS FOR TEST UNIT
 
     // dongfang: This looks like a candidate for being moved off to a separate class.
     /// BATTERY / ENERGY
-    BatteryType batteryType;    ///< The battery type
-    int cells;                  ///< Number of cells
-    float fullVoltage;          ///< Voltage of the fully charged battery (100%)
-    float emptyVoltage;         ///< Voltage of the empty battery (0%)
     float startVoltage;         ///< Voltage at system start
     float tickVoltage;          ///< Voltage where 0.1 V ticks are told
     float lastTickVoltageValue; ///< The last voltage where a tick was announced
     float tickLowpassVoltage;   ///< Lowpass-filtered voltage for the tick announcement
-    float warnVoltage;          ///< Voltage where QGC will start to warn about low battery
     float warnLevelPercent;     ///< Warning level, in percent
     double currentVoltage;      ///< Voltage currently measured
     float lpVoltage;            ///< Low-pass filtered voltage
@@ -499,7 +489,7 @@ protected: //COMMENTS FOR TEST UNIT
     double groundSpeed;          ///< Groundspeed
     double bearingToWaypoint;    ///< Bearing to next waypoint
     UASWaypointManager waypointManager;
-    QGCUASFileManager   fileManager;
+    FileManager   fileManager;
 
     /// ATTITUDE
     bool attitudeKnown;             ///< True if attitude was received, false else
@@ -525,36 +515,25 @@ protected: //COMMENTS FOR TEST UNIT
     bool blockHomePositionChanges;   ///< Block changes to the home position
     bool receivedMode;          ///< True if mode was retrieved from current conenction to UAS
 
-#if defined(QGC_PROTOBUF_ENABLED) && defined(QGC_USE_PIXHAWK_MESSAGES)
-    px::GLOverlay overlay;
-    QMutex overlayMutex;
-    qreal receivedOverlayTimestamp;
-
-    px::ObstacleList obstacleList;
-    QMutex obstacleListMutex;
-    qreal receivedObstacleListTimestamp;
-
-    px::Path path;
-    QMutex pathMutex;
-    qreal receivedPathTimestamp;
-
-    px::PointCloudXYZRGB pointCloud;
-    QMutex pointCloudMutex;
-    qreal receivedPointCloudTimestamp;
-
-    px::RGBDImage rgbdImage;
-    QMutex rgbdImageMutex;
-    qreal receivedRGBDImageTimestamp;
-#endif
-
-    /// PARAMETERS
-    QMap<int, QMap<QString, QVariant>* > parameters; ///< All parameters
-    bool paramsOnceRequested;       ///< If the parameter list has been read at least once
-    QGCUASParamManager paramMgr; ///< Parameter manager for this UAS
+    /// SIMULATION NOISE
+    float xacc_var;             ///< variance of x acclerometer noise for HIL sim (mg)
+    float yacc_var;             ///< variance of y acclerometer noise for HIL sim (mg)
+    float zacc_var;             ///< variance of z acclerometer noise for HIL sim (mg)
+    float rollspeed_var;        ///< variance of x gyroscope noise for HIL sim (rad/s)
+    float pitchspeed_var;       ///< variance of y gyroscope noise for HIL sim (rad/s)
+    float yawspeed_var;         ///< variance of z gyroscope noise for HIL sim (rad/s)
+    float xmag_var;             ///< variance of x magnatometer noise for HIL sim (???)
+    float ymag_var;             ///< variance of y magnatometer noise for HIL sim (???)
+    float zmag_var;             ///< variance of z magnatometer noise for HIL sim (???)
+    float abs_pressure_var;     ///< variance of absolute pressure noise for HIL sim (hPa)
+    float diff_pressure_var;    ///< variance of differential pressure noise for HIL sim (hPa)
+    float pressure_alt_var;     ///< variance of altitude pressure noise for HIL sim (hPa)
+    float temperature_var;      ///< variance of temperature noise for HIL sim (C)
 
     /// SIMULATION
+#ifndef __mobile__
     QGCHilLink* simulation;         ///< Hardware in the loop simulation link
-    QThread* _thread;
+#endif
 
 public:
     /** @brief Set the current battery type */
@@ -569,30 +548,29 @@ public:
     bool isAuto();
     /** @brief Check if vehicle is armed */
     bool isArmed() const { return systemIsArmed; }
-    /** @brief Check if vehicle is in HIL mode */
+    /** @brief Check if vehicle is supposed to be in HIL mode by the GS */
     bool isHilEnabled() const { return hilEnabled; }
+    /** @brief Check if vehicle is in HIL mode */
+    bool isHilActive() const { return base_mode & MAV_MODE_FLAG_HIL_ENABLED; }
 
     /** @brief Get reference to the waypoint manager **/
     UASWaypointManager* getWaypointManager() {
         return &waypointManager;
     }
 
-    /** @brief Get reference to the param manager **/
-    virtual QGCUASParamManagerInterface* getParamManager()  {
-        return &paramMgr;
-    }
-
-    virtual QGCUASFileManager* getFileManager() {
+    virtual FileManager* getFileManager() {
         return &fileManager;
     }
 
     /** @brief Get the HIL simulation */
+#ifndef __mobile__
     QGCHilLink* getHILSimulation() const {
         return simulation;
     }
+#endif
 
-
-    int getSystemType();
+    int  getSystemType();
+    bool isAirplane();
 
     /**
      * @brief Returns true for systems that can reverse. If the system has no control over position, it returns false as
@@ -700,9 +678,6 @@ public:
         case MAV_AUTOPILOT_GENERIC:
             return "GENERIC";
             break;
-        case MAV_AUTOPILOT_PIXHAWK:
-            return "PIXHAWK";
-            break;
         case MAV_AUTOPILOT_SLUGS:
             return "SLUGS";
             break;
@@ -737,7 +712,7 @@ public:
             return "PX4";
             break;
         default:
-            return "";
+            return "UNKNOWN";
             break;
         }
     }
@@ -796,6 +771,7 @@ public slots:
     void go();
 
     /** @brief Enable / disable HIL */
+#ifndef __mobile__
     void enableHilFlightGear(bool enable, QString options, bool sensorHil, QObject * configuration);
     void enableHilJSBSim(bool enable, QString options);
     void enableHilXPlane(bool enable);
@@ -817,6 +793,8 @@ public slots:
     void sendHilOpticalFlow(quint64 time_us, qint16 flow_x, qint16 flow_y, float flow_comp_m_x,
                             float flow_comp_m_y, quint8 quality, float ground_distance);
 
+    float addZeroMeanNoise(float truth_meas, float noise_var);
+
     /**
      * @param time_us
      * @param lat
@@ -837,7 +815,7 @@ public slots:
 
     /** @brief Stops the UAV's Hardware-in-the-Loop simulation status **/
     void stopHil();
-
+#endif
 
     /** @brief Stops the robot system. If it is an MAV, the robot starts the emergency landing procedure **/
     void emergencySTOP();
@@ -874,15 +852,17 @@ public slots:
     void toggleAutonomy();
 
     /** @brief Set the values for the manual control of the vehicle */
-    void setManualControlCommands(float roll, float pitch, float yaw, float thrust, qint8 xHat, qint8 yHat, quint16 buttons);
+#ifndef __mobile__
+    void setExternalControlSetpoint(float roll, float pitch, float yaw, float thrust, qint8 xHat, qint8 yHat, quint16 buttons, quint8);
+#endif
 
     /** @brief Set the values for the 6dof manual control of the vehicle */
+#ifndef __mobile__
     void setManual6DOFControlCommands(double x, double y, double z, double roll, double pitch, double yaw);
+#endif
 
     /** @brief Add a link associated with this robot */
     void addLink(LinkInterface* link);
-    /** @brief Remove a link associated with this robot */
-    void removeLink(QObject* object);
 
     /** @brief Receive a message from one of the communication links. */
     virtual void receiveMessage(LinkInterface* link, mavlink_message_t message);
@@ -897,9 +877,6 @@ public slots:
     /** @brief Send a message over all links this UAS can be reached with (!= all links) */
     void sendMessage(mavlink_message_t message);
 
-    /** @brief Temporary Hack for sending packets to patch Antenna. Send a message over all serial links except for this UAS's */
-    void forwardMessage(mavlink_message_t message);
-
     /** @brief Set this UAS as the system currently in focus, e.g. in the main display widgets */
     void setSelected();
 
@@ -908,28 +885,6 @@ public slots:
 
     /** @brief Set current mode of operation, e.g. auto or manual, does not check the arming status, for anything else than arming/disarming operations use setMode instead */
     void setModeArm(uint8_t newBaseMode, uint32_t newCustomMode);
-
-    /** @brief Request all parameters */
-    void requestParameters();
-
-    /** @brief Request a single parameter by name */
-    void requestParameter(int component, const QString& parameter);
-    /** @brief Request a single parameter by index */
-    void requestParameter(int component, int id);
-
-    /** @brief Set a system parameter */
-    void setParameter(const int compId, const QString& paramId, const QVariant& value);
-
-    /** @brief Write parameters to permanent storage */
-    void writeParametersToStorage();
-    /** @brief Read parameters from permanent storage */
-    void readParametersFromStorage();
-
-    /** @brief Get the names of all parameters */
-    QList<QString> getParameterNames(int component);
-
-    /** @brief Get the ids of all components */
-    QList<int> getComponentIds();
 
     void enableAllDataTransmission(int rate);
     void enableRawSensorDataTransmission(int rate);
@@ -954,11 +909,11 @@ public slots:
     /** @brief Add an offset in body frame to the setpoint */
     void setLocalPositionOffset(float x, float y, float z, float yaw);
 
-    void startRadioControlCalibration(int param=1);
-    void endRadioControlCalibration();
-    void startMagnetometerCalibration();
-    void startGyroscopeCalibration();
-    void startPressureCalibration();
+    void startCalibration(StartCalibrationType calType);
+    void stopCalibration(void);
+
+    void startBusConfig(StartBusConfigType calType);
+    void stopBusConfig(void);
 
     void startDataRecording();
     void stopDataRecording();
@@ -966,6 +921,12 @@ public slots:
 
     /** @brief Triggers the action associated with the given ID. */
     void triggerAction(int action);
+
+    /** @brief Send command to map a RC channel to a parameter */
+    void sendMapRCToParam(QString param_id, float scale, float value0, quint8 param_rc_channel_index, float valueMin, float valueMax);
+
+    /** @brief Send command to disable all bindings/maps between RC and parameters */
+    void unsetRCToParameterMap();
 signals:
     /** @brief The main/battery voltage has changed/was updated */
     //void voltageChanged(int uasId, double voltage); // Defined in UASInterface already
@@ -1003,6 +964,8 @@ signals:
     void groundSpeedChanged(double val, QString name);
     void airSpeedChanged(double val, QString name);
     void bearingToWaypointChanged(double val,QString name);
+    void _sendMessageOnThread(mavlink_message_t message);
+    void _sendMessageOnThreadLink(LinkInterface* link, mavlink_message_t message);
 protected:
     /** @brief Get the UNIX timestamp in milliseconds, enter microseconds */
     quint64 getUnixTime(quint64 time=0);
@@ -1012,7 +975,6 @@ protected:
     quint64 getUnixReferenceTime(quint64 time);
 
     virtual void processParamValueMsg(mavlink_message_t& msg, const QString& paramName,const mavlink_param_value_t& rawValue, mavlink_param_union_t& paramValue);
-    virtual void processParamValueMsgHook(mavlink_message_t& msg, const QString& paramName,const mavlink_param_value_t& rawValue, mavlink_param_union_t& paramValue) { Q_UNUSED(msg); Q_UNUSED(paramName); Q_UNUSED(rawValue); Q_UNUSED(paramValue); };
 
     int componentID[256];
     bool componentMulti[256];
@@ -1034,13 +996,16 @@ protected slots:
     void writeSettings();
     /** @brief Read settings from disk */
     void readSettings();
-
-//    // MESSAGE RECEPTION
-//    /** @brief Receive a named value message */
-//    void receiveMessageNamedValue(const mavlink_message_t& message);
-
+    /** @brief Send a message over this link (to this or to all UAS on this link) */
+    void _sendMessageLink(LinkInterface* link, mavlink_message_t message);
+    /** @brief Send a message over all links this UAS can be reached with (!= all links) */
+    void _sendMessage(mavlink_message_t message);
+    
+private slots:
+    void _linkDisconnected(LinkInterface* link);
+    
 private:
-//    unsigned int mode;          ///< The current mode of the MAV
+    bool _containsLink(LinkInterface* link);
 };
 
 

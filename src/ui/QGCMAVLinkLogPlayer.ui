@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>789</width>
+    <width>948</width>
     <height>38</height>
    </rect>
   </property>
@@ -36,20 +36,20 @@
    <item>
     <widget class="QToolButton" name="playButton">
      <property name="toolTip">
-      <string>Start to replay the logfile</string>
+      <string>Start to replay Flight Data</string>
      </property>
      <property name="statusTip">
-      <string>Start to replay the logfile</string>
+      <string>Start to replay Flight Data</string>
      </property>
      <property name="whatsThis">
-      <string>Start to replay the logfile</string>
+      <string>Start to replay Flight Data</string>
      </property>
      <property name="text">
       <string>...</string>
      </property>
      <property name="icon">
       <iconset resource="../../qgroundcontrol.qrc">
-       <normaloff>:/files/images/actions/media-playback-start.svg</normaloff>:/files/images/actions/media-playback-start.svg</iconset>
+       <normaloff>:/res/Play</normaloff>:/res/Play</iconset>
      </property>
      <property name="checkable">
       <bool>true</bool>
@@ -129,23 +129,23 @@
    <item>
     <widget class="QLabel" name="logFileNameLabel">
      <property name="text">
-      <string>No logfile selected..</string>
+      <string>No Flight Data selected..</string>
      </property>
     </widget>
    </item>
    <item>
     <widget class="QPushButton" name="selectFileButton">
      <property name="toolTip">
-      <string>Select the logfile to replay</string>
+      <string>Select the Flight Data to replay</string>
      </property>
      <property name="statusTip">
-      <string>Select the logfile to replay</string>
+      <string>Select the Flight Data to replay</string>
      </property>
      <property name="whatsThis">
-      <string>Select the logfile to replay</string>
+      <string>Select the Flight Data to replay</string>
      </property>
      <property name="text">
-      <string>Replay Logfile</string>
+      <string>Replay Flight Data</string>
      </property>
     </widget>
    </item>

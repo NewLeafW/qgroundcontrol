@@ -31,12 +31,6 @@ else:exists(user_config.pri):infile(user_config.pri, MAVLINK_CONF) {
         message($$sprintf("Using MAVLink dialect '%1' specified in user_config.pri", $$MAVLINK_CONF))
     }
 }
-# If no valid user selection is found, default to the pixhawk if it's available.
-# Note: This can be a list of several dialects.
-else {
-    MAVLINK_CONF=pixhawk
-    message($$sprintf("Using default MAVLink dialect '%1'.", $$MAVLINK_CONF))
-}
 
 # Then we add the proper include paths dependent on the dialect.
 INCLUDEPATH += $$MAVLINKPATH
@@ -59,139 +53,6 @@ exists($$MAVLINKPATH/common) {
     }
 } else {
     error($$sprintf("MAVLink folder does not exist at '%1'! Run 'git submodule init && git submodule update' on the command line.",$$MAVLINKPATH_REL))
-}
-
-#
-# [OPTIONAL] OpenSceneGraph
-# Allow the user to override OpenSceneGraph compilation through a DISABLE_OPEN_SCENE_GRAPH
-# define like: `qmake DEFINES=DISABLE_OPEN_SCENE_GRAPH`
-contains(DEFINES, DISABLE_OPEN_SCENE_GRAPH) {
-    message("Skipping support for OpenSceneGraph (manual override from command line)")
-    DEFINES -= DISABLE_OPEN_SCENE_GRAPH
-}
-# Otherwise the user can still disable this feature in the user_config.pri file.
-else:exists(user_config.pri):infile(user_config.pri, DEFINES, DISABLE_OPEN_SCENE_GRAPH) {
-    message("Skipping support for OpenSceneGraph (manual override from user_config.pri)")
-}
-else:MacBuild {
-    # GLUT and OpenSceneGraph are part of standard install on Mac
-	message("Including support for OpenSceneGraph")
-	CONFIG += OSGDependency
-
-    INCLUDEPATH += \
-        $$BASEDIR/libs/lib/mac64/include
-
-	LIBS += \
-        -L$$BASEDIR/libs/lib/mac64/lib \
-        -losgWidget
-} else:LinuxBuild {
-	exists(/usr/include/osg) | exists(/usr/local/include/osg) {
-		message("Including support for OpenSceneGraph")
-        CONFIG += OSGDependency
-	} else {
-		warning("Skipping support for OpenSceneGraph (missing libraries, see README)")
-	}
-} else:WindowsBuild {
-	exists($$BASEDIR/libs/lib/osg123) {
-		message("Including support for OpenSceneGraph")
-        CONFIG += OSGDependency
-
-		INCLUDEPATH += \
-            $$BASEDIR/libs/lib/osgEarth/win32/include \
-			$$BASEDIR/libs/lib/osgEarth_3rdparty/win32/OpenSceneGraph-2.8.2/include
-
-		LIBS += -L$$BASEDIR/libs/lib/osgEarth_3rdparty/win32/OpenSceneGraph-2.8.2/lib
-	} else {
-		warning("Skipping support for OpenSceneGraph (missing libraries, see README)")
-	}
-} else {
-    message("Skipping support for OpenSceneGraph (unsupported platform)")
-}
-
-OSGDependency {
-	DEFINES += QGC_OSG_ENABLED
-    
-    LIBS += \
-        -losg \
-        -losgViewer \
-        -losgGA \
-        -losgDB \
-        -losgText \
-        -lOpenThreads
-
-    HEADERS += \
-        src/ui/map3D/gpl.h \
-        src/ui/map3D/CameraParams.h \
-        src/ui/map3D/ViewParamWidget.h \
-        src/ui/map3D/SystemContainer.h \
-        src/ui/map3D/SystemViewParams.h \
-        src/ui/map3D/GlobalViewParams.h \
-        src/ui/map3D/SystemGroupNode.h \
-        src/ui/map3D/Q3DWidget.h \
-        src/ui/map3D/GCManipulator.h \
-        src/ui/map3D/ImageWindowGeode.h \
-        src/ui/map3D/PixhawkCheetahNode.h \
-        src/ui/map3D/Pixhawk3DWidget.h \
-        src/ui/map3D/Q3DWidgetFactory.h \
-        src/ui/map3D/WebImageCache.h \
-        src/ui/map3D/WebImage.h \
-        src/ui/map3D/TextureCache.h \
-        src/ui/map3D/Texture.h \
-        src/ui/map3D/Imagery.h \
-        src/ui/map3D/HUDScaleGeode.h \
-        src/ui/map3D/WaypointGroupNode.h \
-        src/ui/map3D/TerrainParamDialog.h \
-        src/ui/map3D/ImageryParamDialog.h
-        
-    SOURCES += \
-        src/ui/map3D/gpl.cc \
-        src/ui/map3D/CameraParams.cc \
-        src/ui/map3D/ViewParamWidget.cc \
-        src/ui/map3D/SystemContainer.cc \
-        src/ui/map3D/SystemViewParams.cc \
-        src/ui/map3D/GlobalViewParams.cc \
-        src/ui/map3D/SystemGroupNode.cc \
-        src/ui/map3D/Q3DWidget.cc \
-        src/ui/map3D/ImageWindowGeode.cc \
-        src/ui/map3D/GCManipulator.cc \
-        src/ui/map3D/PixhawkCheetahNode.cc \
-        src/ui/map3D/Pixhawk3DWidget.cc \
-        src/ui/map3D/Q3DWidgetFactory.cc \
-        src/ui/map3D/WebImageCache.cc \
-        src/ui/map3D/WebImage.cc \
-        src/ui/map3D/TextureCache.cc \
-        src/ui/map3D/Texture.cc \
-        src/ui/map3D/Imagery.cc \
-        src/ui/map3D/HUDScaleGeode.cc \
-        src/ui/map3D/WaypointGroupNode.cc \
-        src/ui/map3D/TerrainParamDialog.cc \
-        src/ui/map3D/ImageryParamDialog.cc
-}
-
-#
-# [OPTIONAL] Google Earth dependency. Provides Google Earth view to supplement 2D map view.
-# Only supported on Mac and Windows where Google Earth can be installed.
-#
-contains(DEFINES, DISABLE_GOOGLE_EARTH) {
-    message("Skipping support for Google Earth view (manual override from command line)")
-    DEFINES -= DISABLE_GOOGLE_EARTH
-}
-# Otherwise the user can still disable this feature in the user_config.pri file.
-else:exists(user_config.pri):infile(user_config.pri, DEFINES, DISABLE_GOOGLE_EARTH) {
-    message("Skipping support for Google Earth view (manual override from user_config.pri)")
-} else:MacBuild {
-    message("Including support for Google Earth view")
-    DEFINES += QGC_GOOGLE_EARTH_ENABLED
-    HEADERS += src/ui/map3D/QGCGoogleEarthView.h
-    SOURCES += src/ui/map3D/QGCGoogleEarthView.cc
-} else:WindowsBuild {
-    message("Including support for Google Earth view")
-    DEFINES += QGC_GOOGLE_EARTH_ENABLED
-    HEADERS += src/ui/map3D/QGCGoogleEarthView.h
-    SOURCES += src/ui/map3D/QGCGoogleEarthView.cc
-    QT += axcontainer
-} else {
-    message("Skipping support for Google Earth view (unsupported platform)")
 }
 
 #
@@ -372,9 +233,7 @@ MacBuild {
         -F$$BASEDIR/libs/lib/Frameworks \
         -framework SDL
 } else:LinuxBuild {
-	LIBS += \
-		-lSDL \
-		-lSDLmain
+	PKGCONFIG = sdl
 } else:WindowsBuild {
 	INCLUDEPATH += \
         $$BASEDIR/libs/lib/sdl/msvc/include \
@@ -410,11 +269,30 @@ contains (DEFINES, DISABLE_SPEECH) {
 }
 # Mac support is built into OS 10.6+.
 else:MacBuild {
-	message("Including support for speech output")
-	DEFINES += QGC_SPEECH_ENABLED
+    message("Including support for speech output")
+    DEFINES += QGC_SPEECH_ENABLED
 }
 # Windows supports speech through native API.
 else:WindowsBuild {
-	message("Including support for speech output")
-	DEFINES += QGC_SPEECH_ENABLED
+    message("Including support for speech output")
+    DEFINES += QGC_SPEECH_ENABLED
+    LIBS    += -lOle32
 }
+
+#
+# [OPTIONAL] Zeroconf for UDP links
+#
+contains (DEFINES, DISABLE_ZEROCONF) {
+    message("Skipping support for Zeroconf (manual override from command line)")
+    DEFINES -= DISABLE_ZEROCONF
+# Otherwise the user can still disable this feature in the user_config.pri file.
+} else:exists(user_config.pri):infile(user_config.pri, DEFINES, DISABLE_ZEROCONF) {
+    message("Skipping support for Zeroconf (manual override from user_config.pri)")
+# Mac support is built into OS
+} else:MacBuild|iOSBuild {
+    message("Including support for Zeroconf (Bonjour)")
+    DEFINES += QGC_ZEROCONF_ENABLED
+} else {
+    message("Skipping support for Zeroconf (unsupported platform)")
+}
+

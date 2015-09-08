@@ -78,17 +78,13 @@ WaypointEditableView::WaypointEditableView(Waypoint* wp, QWidget* parent) :
     m_ui->comboBox_action->addItem(tr("IF: Delay over"),MAV_CMD_CONDITION_DELAY);
     //m_ui->comboBox_action->addItem(tr("IF: Yaw angle is"),MAV_CMD_CONDITION_YAW);
     m_ui->comboBox_action->addItem(tr("DO: Jump to Index"),MAV_CMD_DO_JUMP);
-#ifdef MAVLINK_ENABLED_PIXHAWK
-    m_ui->comboBox_action->addItem(tr("NAV: Sweep"),MAV_CMD_NAV_SWEEP);
-    m_ui->comboBox_action->addItem(tr("Do: Start Search"),MAV_CMD_DO_START_SEARCH);
-    m_ui->comboBox_action->addItem(tr("Do: Finish Search"),MAV_CMD_DO_FINISH_SEARCH);
-#endif
     m_ui->comboBox_action->addItem(tr("Other"), MAV_CMD_ENUM_END);
 
     // add frames
     m_ui->comboBox_frame->addItem("Global/Abs. Alt",MAV_FRAME_GLOBAL);
     m_ui->comboBox_frame->addItem("Global/Rel. Alt", MAV_FRAME_GLOBAL_RELATIVE_ALT);
     m_ui->comboBox_frame->addItem("Local(NED)",MAV_FRAME_LOCAL_NED);
+    m_ui->comboBox_frame->addItem("Local Offset(NED)",MAV_FRAME_LOCAL_OFFSET_NED);
     m_ui->comboBox_frame->addItem("Mission",MAV_FRAME_MISSION);
 
     // We do not want users to mess with the current waypoint in missions -
@@ -191,17 +187,6 @@ void WaypointEditableView::updateActionView(int action)
         case MAV_CMD_DO_JUMP:
             if(MissionDoJumpWidget) MissionDoJumpWidget->show();
             break;
-        #ifdef MAVLINK_ENABLED_PIXHAWK
-        case MAV_CMD_NAV_SWEEP:
-            if(MissionNavSweepWidget) MissionNavSweepWidget->show();
-            break;
-        case MAV_CMD_DO_START_SEARCH:
-            if(MissionDoStartSearchWidget) MissionDoStartSearchWidget->show();
-            break;
-        case MAV_CMD_DO_FINISH_SEARCH:
-            if(MissionDoFinishSearchWidget) MissionDoFinishSearchWidget->show();
-            break;
-        #endif
 
         default:
             if(MissionOtherWidget) MissionOtherWidget->show();
@@ -305,29 +290,6 @@ void WaypointEditableView::initializeActionView(int actionID)
             m_ui->customActionWidget->layout()->addWidget(MissionDoJumpWidget);
         }
         break;
- #ifdef MAVLINK_ENABLED_PIXHAWK
-    case MAV_CMD_NAV_SWEEP:
-        if (!MissionNavSweepWidget)
-        {
-            MissionNavSweepWidget = new QGCMissionNavSweep(this);
-            m_ui->customActionWidget->layout()->addWidget(MissionNavSweepWidget);
-        }
-        break;
-    case MAV_CMD_DO_START_SEARCH:
-        if (!MissionDoStartSearchWidget)
-        {
-            MissionDoStartSearchWidget = new QGCMissionDoStartSearch(this);
-            m_ui->customActionWidget->layout()->addWidget(MissionDoStartSearchWidget);
-        }
-        break;
-    case MAV_CMD_DO_FINISH_SEARCH:
-        if (!MissionDoFinishSearchWidget)
-        {
-            MissionDoFinishSearchWidget = new QGCMissionDoFinishSearch(this);
-            m_ui->customActionWidget->layout()->addWidget(MissionDoFinishSearchWidget);
-        }
-        break;
-#endif
     case MAV_CMD_ENUM_END:
     default:
         if (!MissionOtherWidget)
@@ -341,6 +303,9 @@ void WaypointEditableView::initializeActionView(int actionID)
 
 void WaypointEditableView::deleted(QObject* waypoint)
 {
+    // Do not dynamic cast or de-reference QObject, since object is either in destructor or may have already
+    // been destroyed.
+
     Q_UNUSED(waypoint);
 }
 
@@ -452,14 +417,14 @@ void WaypointEditableView::updateValues()
 
 
     // update frame
-    MAV_FRAME frame = wp->getFrame();
+    MAV_FRAME frame = (MAV_FRAME)wp->getFrame();
     int frame_index = m_ui->comboBox_frame->findData(frame);
     if (m_ui->comboBox_frame->currentIndex() != frame_index) {
         m_ui->comboBox_frame->setCurrentIndex(frame_index);
     }
 
     // Update action
-    MAV_CMD action = wp->getAction();
+    MAV_CMD action = (MAV_CMD)wp->getAction();
     int action_index = m_ui->comboBox_action->findData(action);
     if (m_ui->comboBox_action->currentIndex() != action_index)
     {
@@ -476,7 +441,7 @@ void WaypointEditableView::updateValues()
     }
 
     emit commandBroadcast(wp->getAction());
-    emit frameBroadcast(wp->getFrame());
+    emit frameBroadcast((MAV_FRAME)wp->getFrame());
     emit param1Broadcast(wp->getParam1());
     emit param2Broadcast(wp->getParam2());
     emit param3Broadcast(wp->getParam3());

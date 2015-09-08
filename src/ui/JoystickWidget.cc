@@ -1,5 +1,5 @@
 #include "JoystickWidget.h"
-#include "MainWindow.h"
+#include "QGCApplication.h"
 #include "ui_JoystickWidget.h"
 #include "JoystickButton.h"
 #include "JoystickAxis.h"
@@ -42,8 +42,11 @@ JoystickWidget::JoystickWidget(JoystickInput* joystick, QWidget *parent) :
     connect(m_ui->enableCheckBox, SIGNAL(toggled(bool)), this->joystick, SLOT(setEnabled(bool)));
 
     // Update the button label colors based on the current theme and watch for future theme changes.
-    styleChanged(MainWindow::instance()->getStyle());
-    connect(MainWindow::instance(), SIGNAL(styleChanged(MainWindow::QGC_MAINWINDOW_STYLE)), this, SLOT(styleChanged(MainWindow::QGC_MAINWINDOW_STYLE)));
+    styleChanged(qgcApp()->styleIsDark());
+    connect(qgcApp(), &QGCApplication::styleChanged, this, &JoystickWidget::styleChanged);
+
+    // change mode when mode combobox is changed
+    connect(m_ui->joystickModeComboBox, SIGNAL(currentIndexChanged(int)), this->joystick, SLOT(setMode(int)));
 
     // Display the widget above all other windows.
     this->raise();
@@ -68,6 +71,14 @@ void JoystickWidget::initUI()
             m_ui->joystickFrame->setEnabled(true);
         }
 
+        // mode combo box
+        m_ui->joystickModeComboBox->addItem("Attitude");
+        m_ui->joystickModeComboBox->addItem("Position");
+        m_ui->joystickModeComboBox->addItem("Force");
+        m_ui->joystickModeComboBox->addItem("Velocity");
+        m_ui->joystickModeComboBox->addItem("Manual");
+        m_ui->joystickModeComboBox->setCurrentIndex(joystick->getMode());
+
         // Create the initial UI.
         createUIForJoystick();
     }
@@ -81,15 +92,15 @@ void JoystickWidget::initUI()
     }
 }
 
-void JoystickWidget::styleChanged(MainWindow::QGC_MAINWINDOW_STYLE newStyle)
+void JoystickWidget::styleChanged(bool styleIsDark)
 {
-    if (newStyle == MainWindow::QGC_MAINWINDOW_STYLE_LIGHT)
+    if (styleIsDark)
     {
-        buttonLabelColor = QColor(0x73, 0xD9, 0x5D);
+        buttonLabelColor = QColor(0x14, 0xC6, 0x14);
     }
     else
     {
-        buttonLabelColor = QColor(0x14, 0xC6, 0x14);
+        buttonLabelColor = QColor(0x73, 0xD9, 0x5D);
     }
 }
 
@@ -228,6 +239,8 @@ void JoystickWidget::createUIForJoystick()
     {
         m_ui->axesBox->hide();
     }
+
+    connect(m_ui->calibrationButton, SIGNAL(clicked()), this, SLOT(cycleCalibrationButton()));
 }
 
 void JoystickWidget::updateAxisValue(int axis, float value)
@@ -252,4 +265,15 @@ void JoystickWidget::joystickButtonPressed(int key)
 void JoystickWidget::joystickButtonReleased(int key)
 {
     buttons.at(key)->setStyleSheet("");
+}
+
+void JoystickWidget::cycleCalibrationButton()
+{
+    if (this->joystick->calibrating()) {
+        this->joystick->setCalibrating(false);
+        m_ui->calibrationButton->setText("Calibrate range");
+    } else {
+        this->joystick->setCalibrating(true);
+        m_ui->calibrationButton->setText("End calibration");
+    }
 }

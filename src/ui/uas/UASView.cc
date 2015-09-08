@@ -40,7 +40,10 @@ This file is part of the PIXHAWK project
 #include "UASWaypointManager.h"
 #include "MainWindow.h"
 #include "ui_UASView.h"
+
+#ifndef __mobile__
 #include <QGCHilFlightGearConfiguration.h>
+#endif
 
 UASView::UASView(UASInterface* uas, QWidget *parent) :
     QWidget(parent),
@@ -118,7 +121,6 @@ UASView::UASView(UASInterface* uas, QWidget *parent) :
     connect(removeAction, SIGNAL(triggered()), this, SLOT(triggerUASDeletion()));
     connect(renameAction, SIGNAL(triggered()), this, SLOT(rename()));
     connect(selectAction, SIGNAL(triggered()), uas, SLOT(setSelected()));
-    connect(hilAction, SIGNAL(triggered(bool)), this, SLOT(showHILUi()));
     connect(selectAirframeAction, SIGNAL(triggered()), this, SLOT(selectAirframe()));
     connect(setBatterySpecsAction, SIGNAL(triggered()), this, SLOT(setBatterySpecs()));
 
@@ -230,49 +232,6 @@ void UASView::mouseDoubleClickEvent (QMouseEvent * event)
 {
     Q_UNUSED(event);
     UASManager::instance()->setActiveUAS(uas);
-    // qDebug() << __FILE__ << __LINE__ << "DOUBLECLICKED";
-}
-
-void UASView::enterEvent(QEvent* event)
-{
-    if (event->type() == QEvent::MouseMove)
-    {
-        emit uasInFocus(uas);
-        if (uas != UASManager::instance()->getActiveUAS())
-        {
-            grabMouse(QCursor(Qt::PointingHandCursor));
-        }
-    }
-
-    if (event->type() == QEvent::MouseButtonDblClick)
-    {
-        // qDebug() << __FILE__ << __LINE__ << "UAS CLICKED!";
-    }
-}
-
-void UASView::leaveEvent(QEvent* event)
-{
-    if (event->type() == QEvent::MouseMove)
-    {
-        emit uasOutFocus(uas);
-        releaseMouse();
-    }
-}
-
-void UASView::showEvent(QShowEvent* event)
-{
-    // React only to internal (pre-display)
-    // events
-    Q_UNUSED(event);
-    refreshTimer->start(updateInterval*10);
-}
-
-void UASView::hideEvent(QHideEvent* event)
-{
-    // React only to internal (pre-display)
-    // events
-    Q_UNUSED(event);
-   // refreshTimer->stop();
 }
 
 void UASView::receiveHeartbeat(UASInterface* uas)
@@ -310,22 +269,22 @@ void UASView::setSystemType(UASInterface* uas, unsigned int systemType)
         switch (systemType)
         {
         case MAV_TYPE_GENERIC:
-            m_ui->typeLabel->setPixmap(QPixmap(":/files/images/mavs/generic.svg"));
+            m_ui->typeLabel->setPixmap(QPixmap(":/res/mavs/Generic"));
             break;
         case MAV_TYPE_FIXED_WING:
-            m_ui->typeLabel->setPixmap(QPixmap(":/files/images/mavs/fixed-wing.svg"));
+            m_ui->typeLabel->setPixmap(QPixmap(":/res/mavs/FixedWing"));
             break;
         case MAV_TYPE_QUADROTOR:
-            m_ui->typeLabel->setPixmap(QPixmap(":/files/images/mavs/quadrotor.svg"));
+            m_ui->typeLabel->setPixmap(QPixmap(":/res/mavs/QuadRotor"));
             break;
         case MAV_TYPE_COAXIAL:
-            m_ui->typeLabel->setPixmap(QPixmap(":/files/images/mavs/coaxial.svg"));
+            m_ui->typeLabel->setPixmap(QPixmap(":/res/mavs/Coaxial"));
             break;
         case MAV_TYPE_HELICOPTER:
-            m_ui->typeLabel->setPixmap(QPixmap(":/files/images/mavs/helicopter.svg"));
+            m_ui->typeLabel->setPixmap(QPixmap(":/res/mavs/Helicopter"));
             break;
         case MAV_TYPE_ANTENNA_TRACKER:
-            m_ui->typeLabel->setPixmap(QPixmap(":/files/images/mavs/unknown.svg"));
+            m_ui->typeLabel->setPixmap(QPixmap(":/res/mavs/Unknown"));
             break;
         case MAV_TYPE_GCS: {
                 // A groundstation is a special system type, update widget
@@ -343,44 +302,44 @@ void UASView::setSystemType(UASInterface* uas, unsigned int systemType)
                 m_ui->landButton->hide();
                 m_ui->shutdownButton->hide();
                 m_ui->abortButton->hide();
-                m_ui->typeLabel->setPixmap(QPixmap(":/files/images/mavs/groundstation.svg"));
+                m_ui->typeLabel->setPixmap(QPixmap(":/res/mavs/Groundstation"));
             }
             break;
         case MAV_TYPE_AIRSHIP:
-            m_ui->typeLabel->setPixmap(QPixmap(":files/images/mavs/airship.svg"));
+            m_ui->typeLabel->setPixmap(QPixmap(":/res/mavs/Airship"));
             break;
         case MAV_TYPE_FREE_BALLOON:
-            m_ui->typeLabel->setPixmap(QPixmap(":files/images/mavs/free-balloon.svg"));
+            m_ui->typeLabel->setPixmap(QPixmap(":/res/mavs/FreeBalloon"));
             break;
         case MAV_TYPE_ROCKET:
-            m_ui->typeLabel->setPixmap(QPixmap(":files/images/mavs/rocket.svg"));
+            m_ui->typeLabel->setPixmap(QPixmap(":/res/mavs/Rocket"));
             break;
         case MAV_TYPE_GROUND_ROVER:
-            m_ui->typeLabel->setPixmap(QPixmap(":files/images/mavs/ground-rover.svg"));
+            m_ui->typeLabel->setPixmap(QPixmap(":/res/mavs/GroundRover"));
             break;
         case MAV_TYPE_SURFACE_BOAT:
-            m_ui->typeLabel->setPixmap(QPixmap(":files/images/mavs/surface-boat.svg"));
+            m_ui->typeLabel->setPixmap(QPixmap(":/res/mavs/SurfaceBoat"));
             break;
         case MAV_TYPE_SUBMARINE:
-            m_ui->typeLabel->setPixmap(QPixmap(":files/images/mavs/submarine.svg"));
+            m_ui->typeLabel->setPixmap(QPixmap(":/res/mavs/Submarine"));
             break;
         case MAV_TYPE_HEXAROTOR:
-            m_ui->typeLabel->setPixmap(QPixmap(":files/images/mavs/hexarotor.svg"));
+            m_ui->typeLabel->setPixmap(QPixmap(":/res/mavs/HexaRotor"));
             break;
         case MAV_TYPE_OCTOROTOR:
-            m_ui->typeLabel->setPixmap(QPixmap(":files/images/mavs/octorotor.svg"));
+            m_ui->typeLabel->setPixmap(QPixmap(":/res/mavs/OctoRotor"));
             break;
         case MAV_TYPE_TRICOPTER:
-            m_ui->typeLabel->setPixmap(QPixmap(":files/images/mavs/tricopter.svg"));
+            m_ui->typeLabel->setPixmap(QPixmap(":/res/mavs/TriCopter"));
             break;
         case MAV_TYPE_FLAPPING_WING:
-            m_ui->typeLabel->setPixmap(QPixmap(":files/images/mavs/flapping-wing.svg"));
+            m_ui->typeLabel->setPixmap(QPixmap(":/res/mavs/FlappingWing"));
             break;
         case MAV_TYPE_KITE:
-            m_ui->typeLabel->setPixmap(QPixmap(":files/images/mavs/kite.svg"));
+            m_ui->typeLabel->setPixmap(QPixmap(":/res/mavs/Kite"));
             break;
         default:
-            m_ui->typeLabel->setPixmap(QPixmap(":/files/images/mavs/unknown.svg"));
+            m_ui->typeLabel->setPixmap(QPixmap("://res/mavs/Unknown"));
             break;
         }
     }
@@ -478,16 +437,24 @@ void UASView::updateLoad(UASInterface* uas, double load)
     }
 }
 
+/**
+ * Right-clicking on the view provides a custom menu for interacting
+ * with the UAS.
+ */
 void UASView::contextMenuEvent (QContextMenuEvent* event)
 {
     QMenu menu(this);
     menu.addAction(selectAction);
     menu.addSeparator();
     menu.addAction(renameAction);
+/*
+    FIXME: The code below is incorrect. removeAction should only be available when link is
+            disconnected. fSee Issue #1275
     if (timeout)
     {
         menu.addAction(removeAction);
     }
+*/
     menu.addAction(hilAction);
     menu.addAction(selectAirframeAction);
     menu.addAction(setBatterySpecsAction);
@@ -551,11 +518,6 @@ void UASView::selectAirframe()
             uas->setAirframe(airframes.indexOf(item));
         }
     }
-}
-
-void UASView::showHILUi()
-{
-     MainWindow::instance()->showHILConfigurationWidget(uas);
 }
 
 void UASView::triggerUASDeletion()
@@ -715,11 +677,9 @@ void UASView::changeEvent(QEvent *e)
     }
 }
 
-/**
- * Implement paintEvent() so that stylesheets work for our custom widget.
- */
-void UASView::paintEvent(QPaintEvent *)
+void UASView::paintEvent(QPaintEvent *event)
 {
+    Q_UNUSED(event);
     QStyleOption opt;
     opt.init(this);
     QPainter p(this);
